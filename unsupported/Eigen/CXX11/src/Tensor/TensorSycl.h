@@ -20,18 +20,23 @@
 template <class T>
 struct MakeGlobalPointer {
   typedef typename cl::sycl::global_ptr<T>::pointer_t Type;
+  typedef typename cl::sycl::global_ptr<T>::reference_t RefType;
 };
 
 // global pointer to set different attribute state for a class
 template <class T>
 struct MakeLocalPointer {
   typedef typename cl::sycl::local_ptr<T>::pointer_t Type;
+  typedef typename cl::sycl::local_ptr<T>::reference_t RefType;
 };
 
 
 namespace Eigen {
 namespace TensorSycl {
 namespace internal {
+
+  template<typename CoeffReturnType, typename OP, typename OutputAccessor, typename InputAccessor, typename LocalAccessor> struct GenericKernelReducer;
+
 
 /// This struct is used for special expression nodes with no operations (for example assign and selectOP).
   struct NoOP;
@@ -74,6 +79,9 @@ template<typename T> struct GetType<false, T>{
 
 /// this is used for extracting tensor reduction
 #include "TensorReductionSycl.h"
+
+/// this is used for extracting tensor convolution
+#include "TensorConvolutionSycl.h"
 
 // kernel execution using fusion
 #include "TensorSyclRun.h"

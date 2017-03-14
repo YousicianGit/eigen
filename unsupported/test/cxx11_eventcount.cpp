@@ -8,12 +8,25 @@
 // Public License v. 2.0. If a copy of the MPL was not distributed
 // with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+#define EIGEN_USE_THREADS
 #include "main.h"
 #include <Eigen/CXX11/ThreadPool>
 
+// Visual studio doesn't implement a rand_r() function since its
+// implementation of rand() is already thread safe
+int rand_reentrant(unsigned int* s) {
+#ifdef EIGEN_COMP_MSVC_STRICT
+  EIGEN_UNUSED_VARIABLE(s);
+  return rand();
+#else
+  return rand_r(s);
+#endif
+}
+
 static void test_basic_eventcount()
 {
-  std::vector<EventCount::Waiter> waiters(1);
+  MaxSizeVector<EventCount::Waiter> waiters(1);
+  waiters.resize(1);
   EventCount ec(waiters);
   EventCount::Waiter& w = waiters[0];
   ec.Notify(false);
@@ -66,25 +79,26 @@ const int TestQueue::kQueueSize;
 static void test_stress_eventcount()
 {
   const int kThreads = std::thread::hardware_concurrency();
-  const int kEvents = 1 << 16;
-  const int kQueues = 10;
+  static const int kEvents = 1 << 16;
+  static const int kQueues = 10;
 
-  std::vector<EventCount::Waiter> waiters(kThreads);
+  MaxSizeVector<EventCount::Waiter> waiters(kThreads);
+  waiters.resize(kThreads);
   EventCount ec(waiters);
   TestQueue queues[kQueues];
 
   std::vector<std::unique_ptr<std::thread>> producers;
   for (int i = 0; i < kThreads; i++) {
     producers.emplace_back(new std::thread([&ec, &queues]() {
-      unsigned rnd = std::hash<std::thread::id>()(std::this_thread::get_id());
-      for (int i = 0; i < kEvents; i++) {
-        unsigned idx = rand_r(&rnd) % kQueues;
+      unsigned int rnd = static_cast<unsigned int>(std::hash<std::thread::id>()(std::this_thread::get_id()));
+      for (int j = 0; j < kEvents; j++) {
+        unsigned idx = rand_reentrant(&rnd) % kQueues;
         if (queues[idx].Push()) {
           ec.Notify(false);
           continue;
         }
-        std::this_thread::yield();
-        i--;
+        EIGEN_THREAD_YIELD();
+        j--;
       }
     }));
   }
@@ -93,11 +107,11 @@ static void test_stress_eventcount()
   for (int i = 0; i < kThreads; i++) {
     consumers.emplace_back(new std::thread([&ec, &queues, &waiters, i]() {
       EventCount::Waiter& w = waiters[i];
-      unsigned rnd = std::hash<std::thread::id>()(std::this_thread::get_id());
-      for (int i = 0; i < kEvents; i++) {
-        unsigned idx = rand_r(&rnd) % kQueues;
+      unsigned int rnd = static_cast<unsigned int>(std::hash<std::thread::id>()(std::this_thread::get_id()));
+      for (int j = 0; j < kEvents; j++) {
+        unsigned idx = rand_reentrant(&rnd) % kQueues;
         if (queues[idx].Pop()) continue;
-        i--;
+        j--;
         ec.Prewait(&w);
         bool empty = true;
         for (int q = 0; q < kQueues; q++) {

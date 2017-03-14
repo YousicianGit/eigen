@@ -129,6 +129,7 @@ struct TensorEvaluator<const TensorFFTOp<FFT, ArgType, FFTResultType, FFTDir>, D
   typedef typename internal::conditional<FFTResultType == RealPart || FFTResultType == ImagPart, RealScalar, ComplexScalar>::type OutputScalar;
   typedef OutputScalar CoeffReturnType;
   typedef typename PacketType<OutputScalar, Device>::type PacketReturnType;
+  static const int PacketSize = internal::unpacket_traits<PacketReturnType>::size;
 
   enum {
     IsAligned = false,
@@ -176,7 +177,6 @@ struct TensorEvaluator<const TensorFFTOp<FFT, ArgType, FFTResultType, FFTDir>, D
     }
   }
 
-
   EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE void cleanup() {
     if (m_data) {
       m_device.deallocate(m_data);
@@ -189,9 +189,15 @@ struct TensorEvaluator<const TensorFFTOp<FFT, ArgType, FFTResultType, FFTDir>, D
     return m_data[index];
   }
 
-  template<int LoadMode>
-  EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE PacketReturnType packet(Index index) const {
+  template <int LoadMode>
+  EIGEN_DEVICE_FUNC EIGEN_ALWAYS_INLINE PacketReturnType
+  packet(Index index) const {
     return internal::ploadt<PacketReturnType, LoadMode>(m_data + index);
+  }
+
+  EIGEN_DEVICE_FUNC EIGEN_STRONG_INLINE TensorOpCost
+  costPerCoeff(bool vectorized) const {
+    return TensorOpCost(sizeof(CoeffReturnType), 0, 0, vectorized, PacketSize);
   }
 
   EIGEN_DEVICE_FUNC Scalar* data() const { return m_data; }
@@ -323,7 +329,7 @@ struct TensorEvaluator<const TensorFFTOp<FFT, ArgType, FFTResultType, FFTDir>, D
 
     for (Index i = 0; i < n; ++i) {
       if(FFTDir == FFT_FORWARD) {
-        a[i] = data[i] * std::conj(pos_j_base_powered[i]);
+        a[i] = data[i] * numext::conj(pos_j_base_powered[i]);
       }
       else {
         a[i] = data[i] * pos_j_base_powered[i];
@@ -338,7 +344,7 @@ struct TensorEvaluator<const TensorFFTOp<FFT, ArgType, FFTResultType, FFTDir>, D
         b[i] = pos_j_base_powered[i];
       }
       else {
-        b[i] = std::conj(pos_j_base_powered[i]);
+        b[i] = numext::conj(pos_j_base_powered[i]);
       }
     }
     for (Index i = n; i < m - n; ++i) {
@@ -349,7 +355,7 @@ struct TensorEvaluator<const TensorFFTOp<FFT, ArgType, FFTResultType, FFTDir>, D
         b[i] = pos_j_base_powered[m-i];
       }
       else {
-        b[i] = std::conj(pos_j_base_powered[m-i]);
+        b[i] = numext::conj(pos_j_base_powered[m-i]);
       }
     }
 
@@ -373,7 +379,7 @@ struct TensorEvaluator<const TensorFFTOp<FFT, ArgType, FFTResultType, FFTDir>, D
 
     for (Index i = 0; i < n; ++i) {
       if(FFTDir == FFT_FORWARD) {
-        data[i] = a[i] * std::conj(pos_j_base_powered[i]);
+        data[i] = a[i] * numext::conj(pos_j_base_powered[i]);
       }
       else {
         data[i] = a[i] * pos_j_base_powered[i];

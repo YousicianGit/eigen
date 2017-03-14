@@ -38,7 +38,7 @@ namespace Eigen {
 template <typename Work, unsigned kSize>
 class RunQueue {
  public:
-  RunQueue() : front_(), back_() {
+  RunQueue() : front_(0), back_(0) {
     // require power-of-two for fast masking
     eigen_assert((kSize & (kSize - 1)) == 0);
     eigen_assert(kSize > 2);            // why would you do this?
@@ -100,7 +100,7 @@ class RunQueue {
   // PopBack removes and returns the last elements in the queue.
   // Can fail spuriously.
   Work PopBack() {
-    if (Empty()) return 0;
+    if (Empty()) return Work();
     std::unique_lock<std::mutex> lock(mutex_, std::try_to_lock);
     if (!lock) return Work();
     unsigned back = back_.load(std::memory_order_relaxed);
@@ -168,7 +168,7 @@ class RunQueue {
       // larger than it is during concurrent modifications. E.g. pop can
       // decrement size before the corresponding push has incremented it.
       // So the computed size can be up to kSize + 1, fix it.
-      if (size > kSize) size = kSize;
+      if (size > static_cast<int>(kSize)) size = kSize;
       return size;
     }
   }
@@ -176,6 +176,13 @@ class RunQueue {
   // Empty tests whether container is empty.
   // Can be called by any thread at any time.
   bool Empty() const { return Size() == 0; }
+
+  // Delete all the elements from the queue.
+  void Flush() {
+    while (!Empty()) {
+      PopFront();
+    }
+  }
 
  private:
   static const unsigned kMask = kSize - 1;

@@ -10,8 +10,7 @@
 #ifndef EIGEN_CXX11_THREADPOOL_MODULE
 #define EIGEN_CXX11_THREADPOOL_MODULE
 
-//#include <Eigen/Core>
-#include "Core"
+#include "../../../Eigen/Core"
 
 #include <Eigen/src/Core/util/DisableStupidWarnings.h>
 
@@ -28,17 +27,9 @@
   * \endcode
   */
 
-//#include <vector>
 
-//#include "src/Core/util/EmulateArray.h"
-//#include "src/Core/util/MaxSizeVector.h"
-//#include "third_party/eigen3/Eigen/src/Core/util/Macros.h"
-
-
-// Emulate the cxx11 functionality that we need if the compiler doesn't support it.
-// Visual studio 2015 doesn't advertise itself as cxx11 compliant, although it
-// supports enough of the standard for our needs
-
+// The code depends on CXX11, so only include the module if the
+// compiler supports it.
 #if __cplusplus > 199711L || EIGEN_COMP_MSVC >= 1900
 #include <cstddef>
 #include <cstring>
@@ -54,12 +45,30 @@
 #include <functional>
 #include <memory>
 
+#include "src/util/CXX11Meta.h"
+#include "src/util/MaxSizeVector.h"
+
+#include "src/ThreadPool/ThreadLocal.h"
+#include "src/ThreadPool/ThreadYield.h"
+#include "src/ThreadPool/ThreadCancel.h"
 #include "src/ThreadPool/EventCount.h"
 #include "src/ThreadPool/RunQueue.h"
 #include "src/ThreadPool/ThreadPoolInterface.h"
 #include "src/ThreadPool/ThreadEnvironment.h"
 #include "src/ThreadPool/SimpleThreadPool.h"
 #include "src/ThreadPool/NonBlockingThreadPool.h"
+
+
+// Use the more efficient NonBlockingThreadPool by default.
+namespace Eigen {
+#ifndef EIGEN_USE_SIMPLE_THREAD_POOL
+template <typename Env> using ThreadPoolTempl = NonBlockingThreadPoolTempl<Env>;
+typedef NonBlockingThreadPool ThreadPool;
+#else
+template <typename Env> using ThreadPoolTempl = SimpleThreadPoolTempl<Env>;
+typedef SimpleThreadPool ThreadPool;
+#endif
+}  // namespace Eigen
 
 #endif
 
